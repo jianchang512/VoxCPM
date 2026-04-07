@@ -7,10 +7,23 @@ import gradio as gr
 from typing import Optional, Tuple
 from funasr import AutoModel
 from pathlib import Path
+ROOT_DIR=Path(os.getcwd()).as_posix()
 
+os.environ['MODELSCOPE_CACHE'] = ROOT_DIR + "/models"
+os.environ['HF_HOME'] = ROOT_DIR + "/models"
+os.environ['HF_HUB_CACHE'] = ROOT_DIR + "/models"
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 if os.environ.get("HF_REPO_ID", "").strip() == "":
     os.environ["HF_REPO_ID"] = "openbmb/VoxCPM2"
+
+try:
+    import huggingface_hub
+    huggingface_hub.snapshot_download(
+        repo_id=os.environ["HF_REPO_ID"],
+        local_dir=f'{ROOT_DIR}/models/openbmb__VoxCPM2',
+    )
+except Exception as e:
+    print(e)
 
 import voxcpm
 
@@ -514,6 +527,7 @@ def run_demo(
     interface.queue(max_size=10, default_concurrency_limit=1).launch(
         server_name=server_name,
         server_port=server_port,
+        share=True,
         show_error=show_error,
         i18n=I18N,
         theme=_APP_THEME,
