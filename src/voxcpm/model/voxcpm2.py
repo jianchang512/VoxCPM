@@ -139,7 +139,7 @@ class VoxCPMConfig(BaseModel):
 
     max_length: int = 8192
     device: str = "cuda"
-    dtype: str = "float16"
+    dtype: str = "bfloat16"
 
 
 class LoRAConfig(BaseModel):
