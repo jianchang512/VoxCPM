@@ -1,6 +1,10 @@
 <h2 align="center">VoxCPM2: Tokenizer-Free TTS for Multilingual Speech Generation, Creative Voice Design, and True-to-Life Cloning</h2>
 
 <p align="center">
+  <b>English</b> | <a href="./README_zh.md">中文</a>
+</p>
+
+<p align="center">
   <a href="https://github.com/OpenBMB/VoxCPM/"><img src="https://img.shields.io/badge/Project%20Page-GitHub-blue" alt="Project Page"></a>
   <a href="https://huggingface.co/spaces/OpenBMB/VoxCPM-Demo"><img src="https://img.shields.io/badge/Live%20Playground-Demo-orange" alt="Live Playground"></a>
   <a href="https://voxcpm.readthedocs.io/en/latest/"><img src="https://img.shields.io/badge/Docs-ReadTheDocs-8CA1AF" alt="Documentation"></a>
@@ -42,7 +46,7 @@ VoxCPM is a **tokenizer-free** Text-to-Speech system that directly generates con
 - 🎙️ **Ultimate Cloning** — Reproduce every vocal nuance: provide both reference audio and its transcript, and the model continues seamlessly from the reference, faithfully preserving every vocal detail — timbre, rhythm, emotion, and style (same as VoxCPM1.5)
 - 🔊 **48kHz High-Quality Audio** — Accepts 16kHz reference audio and directly outputs 48kHz studio-quality audio via AudioVAE V2's asymmetric encode/decode design, with built-in super-resolution — no external upsampler needed
 - 🧠 **Context-Aware Synthesis** — Automatically infers appropriate prosody and expressiveness from text content
-- ⚡ **Real-Time Streaming** — RTF as low as ~0.3 on NVIDIA RTX 4090, and ~0.13  accelerated by [Nano-VLLM](https://github.com/a710128/nanovllm-voxcpm)
+- ⚡ **Real-Time Streaming** — RTF as low as ~0.3 on NVIDIA RTX 4090, and ~0.13 accelerated by [Nano-vLLM](https://github.com/a710128/nanovllm-voxcpm) or [vLLM-Omni](https://github.com/vllm-project/vllm-omni) — official vLLM omni-modal serving for VoxCPM2 with PagedAttention and an OpenAI-compatible API
 - 📜 **Fully Open-Source & Commercial-Ready** — Weights and code released under the [Apache-2.0](LICENSE) license, free for commercial use
 
 
@@ -88,7 +92,7 @@ Chinese Dialect: 四川话, 粤语, 吴语, 东北话, 河南话, 陕西话, 山
 pip install voxcpm
 ```
 
-> **Requirements:** Python ≥ 3.10, PyTorch ≥ 2.5.0, CUDA ≥ 12.0. See [Quick Start Docs](https://voxcpm.readthedocs.io/en/latest/quickstart.html) for details.
+> **Requirements:** Python ≥ 3.10 (<3.13), PyTorch ≥ 2.5.0, CUDA ≥ 12.0. See [Quick Start Docs](https://voxcpm.readthedocs.io/en/latest/quickstart.html) for details.
 
 ### Python API
 
@@ -99,7 +103,7 @@ from voxcpm import VoxCPM
 import soundfile as sf
 
 model = VoxCPM.from_pretrained(
-  "openbmb/VoxCPM2"
+  "openbmb/VoxCPM2",
   load_denoiser=False,
 )
 
@@ -110,6 +114,28 @@ wav = model.generate(
 )
 sf.write("demo.wav", wav, model.tts_model.sample_rate)
 print("saved: demo.wav")
+```
+
+If you prefer downloading from ModelScope first, you can use:
+
+```bash
+pip install modelscope
+```
+
+```python
+from modelscope import snapshot_download
+snapshot_download("OpenBMB/VoxCPM2", local_dir='./pretrained_models/VoxCPM2') # specify the local directory to save the model
+
+from voxcpm import VoxCPM
+import soundfile as sf
+model = VoxCPM.from_pretrained("./pretrained_models/VoxCPM2", load_denoiser=False)
+
+wav = model.generate(
+    text="VoxCPM2 is the current recommended release for realistic multilingual speech synthesis.",
+    cfg_value=2.0,
+    inference_timesteps=10,
+)
+sf.write("demo.wav", wav, model.tts_model.sample_rate)
 ```
 
 #### 🎨 Voice Design
@@ -213,7 +239,7 @@ voxcpm --help
 ### Web Demo
 
 ```bash
-python app.py   # then open http://localhost:7860
+python app.py --port 8808  # then open in browser: http://localhost:8808
 ```
 
 ### 🚢 Production Deployment (Nano-vLLM)
@@ -235,6 +261,32 @@ server.stop()
 ```
 
 > **RTF as low as ~0.13 on NVIDIA RTX 4090** (vs ~0.3 with the standard PyTorch implementation), with support for batched concurrent requests and a FastAPI HTTP server. See the [Nano-vLLM-VoxCPM repo](https://github.com/a710128/nanovllm-voxcpm) for deployment details.
+
+### 🏭 Production Serving (vLLM-Omni)
+
+For production multi-tenant deployments, use [**vLLM-Omni**](https://github.com/vllm-project/vllm-omni) — the official vLLM project's omni-modal extension with native **VoxCPM2** support. PagedAttention KV cache, continuous batching, and a drop-in **OpenAI-compatible** `/v1/audio/speech` endpoint.
+
+```bash
+# Install from source (latest main — vllm-omni is rapidly evolving)
+uv pip install vllm==0.19.0 --torch-backend=auto
+git clone https://github.com/vllm-project/vllm-omni.git && cd vllm-omni
+uv pip install -e .
+```
+
+See the [vLLM-Omni installation guide](https://vllm-omni.readthedocs.io/en/latest/getting_started/installation/) for other platforms (ROCm, XPU, MUSA, NPU) and Docker images.
+
+```bash
+# Launch an OpenAI-compatible TTS server (--omni enables omni-modal serving)
+vllm serve openbmb/VoxCPM2 --omni --port 8000
+
+# Call it from any OpenAI client
+curl http://localhost:8000/v1/audio/speech \
+  -H "Content-Type: application/json" \
+  -d '{"model":"openbmb/VoxCPM2","input":"Hello from VoxCPM2 on vLLM-Omni!","voice":"default"}' \
+  --output out.wav
+```
+
+> Built on the upstream vLLM scheduler, with batched concurrent requests, streaming chunk delivery, and multi-GPU deployment out of the box. See the [VoxCPM2 example](https://github.com/vllm-project/vllm-omni/tree/main/examples/online_serving/voxcpm2) for full deployment recipes.
 
 > **Full parameter reference, multi-scenario examples, and voice cloning tips →** [Quick Start Guide](https://voxcpm.readthedocs.io/en/latest/quickstart.html) | [Usage Guide](https://voxcpm.readthedocs.io/en/latest/usage_guide.html) | [Cookbook](https://voxcpm.readthedocs.io/en/latest/cookbook.html)
 
@@ -389,10 +441,54 @@ VoxCPM2 achieves state-of-the-art or comparable results on public zero-shot and 
 
 </details>
 
+
+### Internal 30-Language ASR Benchmark
+
+We additionally run an internal multilingual intelligibility benchmark with **30 languages × 500 samples**. ASR transcription is evaluated via **Gemini 3.1 Flash Lite API**.
+
+<details>
+<summary><b>Internal 30-Language ASR Benchmark (click to expand)</b></summary>
+
+| Language | Metric | VoxCPM2 | Fish S2-Pro |
+|---|---:|---:|---:|
+| ar (Arabic) | CER | 1.23% | 0.30% |
+| da (Danish) | WER | 2.70% | 3.52% |
+| de (German) | WER | 0.96% | 0.64% |
+| el (Greek) | WER | 3.17% | 4.61% |
+| en (English) | WER | 0.42% | 1.03% |
+| es (Spanish) | WER | 1.33% | 0.64% |
+| fi (Finnish) | WER | 2.24% | 2.80% |
+| fr (French) | WER | 2.16% | 2.34% |
+| he (Hebrew) | CER | 2.98% | 15.27% |
+| hi (Hindi) | CER | 0.79% | 0.91% |
+| id (Indonesian) | WER | 1.36% | 1.68% |
+| it (Italian) | WER | 1.65% | 1.08% |
+| ja (Japanese) | CER | 2.40% | 1.82% |
+| km (Khmer) | CER | 2.05% | 75.15% |
+| ko (Korean) | CER | 0.95% | 0.29% |
+| lo (Lao) | CER | 1.90% | 87.40% |
+| ms (Malay) | WER | 1.75% | 1.41% |
+| my (Burmese) | CER | 1.42% | 85.27% |
+| nl (Dutch) | WER | 1.25% | 1.68% |
+| no (Norwegian) | WER | 2.49% | 3.76% |
+| pl (Polish) | WER | 1.90% | 1.65% |
+| pt (Portuguese) | WER | 1.48% | 1.49% |
+| ru (Russian) | WER | 0.90% | 0.86% |
+| sv (Swedish) | WER | 2.22% | 2.63% |
+| sw (Swahili) | CER | 1.07% | 2.02% |
+| th (Thai) | CER | 0.94% | 1.92% |
+| tl (Tagalog) | WER | 2.63% | 4.00% |
+| tr (Turkish) | WER | 1.65% | 1.65% |
+| vi (Vietnamese) | WER | 1.56% | 5.56% |
+| zh (Chinese) | CER | 0.92% | 1.02% |
+| Average (30 languages) |  | **1.68%** | - |
+
+</details>
+
 ### InstructTTSEval
 
 <details>
-<summary><b>Instruction-Guided Voice Design Results</b></summary>
+<summary><b>Instruction-Guided Voice Design Results (click to expand)</b></summary>
 
 | Model | InstructTTSEval-ZH | | | InstructTTSEval-EN | | |
 |-------|:---:|:----:|:----:|:----:|:----:|:----:|
@@ -458,11 +554,13 @@ Full documentation: **[voxcpm.readthedocs.io](https://voxcpm.readthedocs.io/en/l
 | Project | Description |
 |---|---|
 | [**Nano-vLLM**](https://github.com/a710128/nanovllm-voxcpm) | High-throughput and Fast GPU serving |
+| [**vLLM-Omni**](https://github.com/vllm-project/vllm-omni) | Official vLLM omni-modal serving for VoxCPM2 — PagedAttention, OpenAI-compatible API |
 | [**VoxCPM.cpp**](https://github.com/bluryar/VoxCPM.cpp) | GGML/GGUF: CPU, CUDA, Vulkan inference |
 | [**VoxCPM-ONNX**](https://github.com/bluryar/VoxCPM-ONNX) | ONNX export for CPU inference |
 | [**VoxCPMANE**](https://github.com/0seba/VoxCPMANE) | Apple Neural Engine backend |
 | [**voxcpm_rs**](https://github.com/madushan1000/voxcpm_rs) | Rust re-implementation |
 | [**ComfyUI-VoxCPM**](https://github.com/wildminder/ComfyUI-VoxCPM) | ComfyUI node-based workflows |
+| [**ComfyUI_RH_VoxCPM**](https://github.com/HM-RunningHub/ComfyUI_RH_VoxCPM) | Feature-complete ComfyUI workflow for VoxCPM 2 with multi-speaker generation, LoRA, and auto-ASR |
 | [**ComfyUI-VoxCPMTTS**](https://github.com/1038lab/ComfyUI-VoxCPMTTS) | ComfyUI TTS extension |
 | [**TTS WebUI**](https://github.com/rsxdalv/tts_webui_extension.vox_cpm) | Browser-based TTS extension |
 
